@@ -1,76 +1,103 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import '../models/task.dart';
+import 'package:uuid/uuid.dart';
 import '../widgets/task_tile.dart';
 import '../widgets/add_task_dialog.dart';
+import '../models/category.dart'; // Add this import
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class HomeScreen extends StatelessWidget {
+  final List<Task> tasks;
+  final Function(List<Task>) onTasksChanged;
+  final _uuid = const Uuid();
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
+  const HomeScreen({
+    super.key,
+    required this.tasks,
+    required this.onTasksChanged,
+  });
 
-class _HomeScreenState extends State<HomeScreen> {
-  final List<Task> _tasks = [];
-
-  void _addTask(String title) {
-    setState(() {
-      _tasks.add(Task(
-        id: DateTime.now().toString(),
-        title: title,
-      ));
-    });
+  void _toggleTask(String taskId) {
+    final updatedTasks = tasks.map((task) {
+      if (task.id == taskId) {
+        return Task(
+          id: task.id,
+          title: task.title,
+          isCompleted: !task.isCompleted,
+          createdAt: task.createdAt,
+          expiresAt: task.expiresAt,
+        );
+      }
+      return task;
+    }).toList();
+    
+    onTasksChanged(updatedTasks);
   }
 
-  void _toggleTask(String id) {
-    setState(() {
-      final task = _tasks.firstWhere((task) => task.id == id);
-      task.isCompleted = !task.isCompleted;
-    });
+  void _addTask(BuildContext context) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const AddTaskDialog(),
+    );
+
+    if (result != null) {
+      final newTask = Task(
+        id: _uuid.v4(),
+        title: result['title'],
+        expiresAt: result['expiresAt'],
+        category: result['category'] as TaskCategory, // Ensure category is passed
+      );
+      onTasksChanged([...tasks, newTask]);
+    }
   }
 
-  void _deleteTask(String id) {
-    setState(() {
-      _tasks.removeWhere((task) => task.id == id);
-    });
+  void _deleteTask(String taskId) {
+    final updatedTasks = tasks.where((task) => task.id != taskId).toList();
+    onTasksChanged(updatedTasks);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('قائمة المهام'),
-          centerTitle: true,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('قائمة المهام', 
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.teal,
+        elevation: 0,
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.teal.shade200,
+              Colors.white,
+            ],
+          ),
         ),
-        body: _tasks.isEmpty
-            ? const Center(
-                child: Text('لا توجد مهام حالياً'),
-              )
-            : ListView.builder(
-                itemCount: _tasks.length,
-                itemBuilder: (context, index) {
-                  return TaskTile(
-                    task: _tasks[index],
-                    onToggle: _toggleTask,
-                    onDelete: _deleteTask,
-                  );
-                },
-              ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () async {
-            final result = await showDialog<String>(
-              context: context,
-              builder: (context) => const AddTaskDialog(),
-            );
-            if (result != null && result.isNotEmpty) {
-              _addTask(result);
-            }
-          },
-          child: const Icon(Icons.add),
-        ),
+        child: tasks.isEmpty 
+          ? const Center(
+              child: Text('لا توجد مهام حالياً',
+                style: TextStyle(fontSize: 18, color: Colors.grey)),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: tasks.length,
+              itemBuilder: (context, index) {
+                final task = tasks[index];
+                return TaskTile(
+                  task: task,
+                  onToggle: _toggleTask,
+                  onDelete: _deleteTask,
+                );
+              },
+            ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _addTask(context),
+        backgroundColor: Colors.teal,
+        child: const Icon(Icons.add),
       ),
     );
   }
